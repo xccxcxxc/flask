@@ -4,7 +4,14 @@ from flask_login import current_user, login_user, logout_user, login_required
 import sqlalchemy as sa
 from app import app,db
 from app.models import User
-from app.forms import LoginForm
+from app.forms import LoginForm, RegistrationForm
+import logging
+
+#logging.basicConfig(level=logging.INFO,
+                    #format='%(asctime)s - %(levelname)s: %(message)s')
+
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - [%(funcName)s]: %(message)s')
 
 @app.route('/feed')
 def feed():
@@ -29,6 +36,7 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+
     if current_user.is_authenticated:
         return redirect(url_for('index'))
 
@@ -37,15 +45,18 @@ def login():
         user = db.session.scalar(
             sa.select(User).where(User.username == form.username.data)
         )
+        #logging.info(f'Username: {form.username.data}, nextpage:{request.args.get("next")}, user: {user}')
         if user is None or not user.check_password(form.password.data):
             flash('Invalid username or password')
             return redirect(url_for('login'))
         login_user(user, remember=form.remember_me.data)
         next_page = request.args.get('next')
-        print(f'next_page is {next_page}')
+
         if not next_page or urlsplit(next_page).netloc != '':
             next_page = url_for('index')
         return redirect(next_page)
+    else:
+        logging.error(f'{form.errors}')
     return render_template('login.html', title='Sign in', form=form)
 
 
@@ -53,3 +64,23 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('index'))
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    #logging.info(f'current_user: {current_user}')
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = RegistrationForm()
+    #logging.info(f'Validata: {form.validate_on_submit()} Username: {form.username.data}')
+    if form.validate_on_submit():
+        user = User(username=form.username.data, email=form.email.data)
+        user.set_password(form.password.data)
+        db.session.add(user)
+        db.session.commit()
+        flash('Congratulations, yu are now a registered user!')
+        return redirect(url_for('login'))
+    else:
+        logging.error(f'{form.errors}')
+    return render_template('register.html', title='Register', form=form)
+
